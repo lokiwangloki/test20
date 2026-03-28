@@ -12,6 +12,7 @@ import json
 from datetime import datetime
 from concurrent.futures import ThreadPoolExecutor, as_completed
 
+from config_env import env_override
 
 # ================= 配置 =================
 
@@ -65,6 +66,18 @@ def _load_account_count_config() -> dict:
                 defaults.update(cfg)
         except Exception as e:
             print(f"[警告] 读取 config.json 失败: {e}")
+    env_mappings = {
+        "token_json_dir": "TOKEN_JSON_DIR",
+        "ak_file": "AK_FILE",
+        "upload_api_url": "UPLOAD_API_URL",
+        "upload_api_token": "UPLOAD_API_TOKEN",
+        "upload_api_proxy": "UPLOAD_API_PROXY",
+        "proxy": "PROXY",
+    }
+    for key, default_env_name in env_mappings.items():
+        env_value = env_override(defaults, key, default_env_name)
+        if env_value is not None:
+            defaults[key] = env_value
     defaults["proxy"] = _normalize_proxy_value(defaults.get("proxy", ""))
     return defaults
 

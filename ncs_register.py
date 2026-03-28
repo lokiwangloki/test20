@@ -25,6 +25,7 @@ from dataclasses import dataclass
 from typing import Any, Dict, Optional
 
 from curl_cffi import requests as curl_requests
+from config_env import env_override
 
 # ================= 加载配置 =================
 def _normalize_proxy_value(value: Any) -> str:
@@ -88,29 +89,39 @@ def _load_config():
         except Exception as e:
             print(f"⚠️ 加载 config.json 失败: {e}")
 
-    config["duckmail_api_base"] = os.environ.get("DUCKMAIL_API_BASE", config["duckmail_api_base"])
-    config["duckmail_bearer"] = os.environ.get("DUCKMAIL_BEARER", config["duckmail_bearer"])
-    config["tempmail_lol_api_base"] = os.environ.get("TEMPMAIL_LOL_API_BASE", config["tempmail_lol_api_base"])
-    config["lamail_api_base"] = os.environ.get("LAMAIL_API_BASE", config["lamail_api_base"])
-    config["lamail_api_key"] = os.environ.get("LAMAIL_API_KEY", config["lamail_api_key"])
-    config["lamail_domain"] = os.environ.get("LAMAIL_DOMAIN", config["lamail_domain"])
-    config["proxy"] = _normalize_proxy_value(os.environ.get("PROXY", config["proxy"]))
-    config["total_accounts"] = int(os.environ.get("TOTAL_ACCOUNTS", config["total_accounts"]))
-    config["enable_oauth"] = os.environ.get("ENABLE_OAUTH", config["enable_oauth"])
-    config["oauth_required"] = os.environ.get("OAUTH_REQUIRED", config["oauth_required"])
-    config["oauth_issuer"] = os.environ.get("OAUTH_ISSUER", config["oauth_issuer"])
-    config["oauth_client_id"] = os.environ.get("OAUTH_CLIENT_ID", config["oauth_client_id"])
-    config["oauth_redirect_uri"] = os.environ.get("OAUTH_REDIRECT_URI", config["oauth_redirect_uri"])
-    config["ak_file"] = os.environ.get("AK_FILE", config["ak_file"])
-    config["rk_file"] = os.environ.get("RK_FILE", config["rk_file"])
-    config["token_json_dir"] = os.environ.get("TOKEN_JSON_DIR", config["token_json_dir"])
-    config["upload_api_url"] = os.environ.get("UPLOAD_API_URL", config["upload_api_url"])
-    config["upload_api_token"] = os.environ.get("UPLOAD_API_TOKEN", config["upload_api_token"])
-    config["upload_api_proxy"] = os.environ.get("UPLOAD_API_PROXY", config["upload_api_proxy"])
-    config["mail_provider"] = os.environ.get("MAIL_PROVIDER", config["mail_provider"])
-    config["cfmail_config_path"] = os.environ.get("CFMAIL_CONFIG_PATH", config["cfmail_config_path"])
-    config["cfmail_profile"] = os.environ.get("CFMAIL_PROFILE", config["cfmail_profile"])
-    config["cpa_upload_every_n"] = int(os.environ.get("CPA_UPLOAD_EVERY_N", config["cpa_upload_every_n"]))
+    env_mappings = {
+        "duckmail_api_base": "DUCKMAIL_API_BASE",
+        "duckmail_bearer": "DUCKMAIL_BEARER",
+        "tempmail_lol_api_base": "TEMPMAIL_LOL_API_BASE",
+        "lamail_api_base": "LAMAIL_API_BASE",
+        "lamail_api_key": "LAMAIL_API_KEY",
+        "lamail_domain": "LAMAIL_DOMAIN",
+        "proxy": "PROXY",
+        "total_accounts": "TOTAL_ACCOUNTS",
+        "enable_oauth": "ENABLE_OAUTH",
+        "oauth_required": "OAUTH_REQUIRED",
+        "oauth_issuer": "OAUTH_ISSUER",
+        "oauth_client_id": "OAUTH_CLIENT_ID",
+        "oauth_redirect_uri": "OAUTH_REDIRECT_URI",
+        "ak_file": "AK_FILE",
+        "rk_file": "RK_FILE",
+        "token_json_dir": "TOKEN_JSON_DIR",
+        "upload_api_url": "UPLOAD_API_URL",
+        "upload_api_token": "UPLOAD_API_TOKEN",
+        "upload_api_proxy": "UPLOAD_API_PROXY",
+        "mail_provider": "MAIL_PROVIDER",
+        "cfmail_config_path": "CFMAIL_CONFIG_PATH",
+        "cfmail_profile": "CFMAIL_PROFILE",
+        "cpa_upload_every_n": "CPA_UPLOAD_EVERY_N",
+    }
+    for key, default_env_name in env_mappings.items():
+        env_value = env_override(config, key, default_env_name)
+        if env_value is not None:
+            config[key] = env_value
+
+    config["proxy"] = _normalize_proxy_value(config["proxy"])
+    config["total_accounts"] = int(config["total_accounts"])
+    config["cpa_upload_every_n"] = int(config["cpa_upload_every_n"])
 
     return config
 
