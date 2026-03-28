@@ -62,6 +62,26 @@ class ProxyNormalizationTests(unittest.TestCase):
         self.assertEqual(config["upload_api_url"], "https://upload.example.com")
         self.assertEqual(config["upload_api_token"], "upload-token")
 
+    def test_auto_scheduler_build_register_input_matches_cli_prompt_order(self):
+        cfg = {
+            "proxy": "",
+            "upload_api_url": "http://example.invalid/v0/management/auth-files",
+        }
+        params = {
+            "proxy": "",
+            "preflight": "n",
+            "output_file": "registered_accounts.txt",
+            "total_accounts": 200,
+            "max_workers": 3,
+            "cpa_cleanup": "n",
+            "cpa_upload_every_n": 3,
+        }
+        stdin_input = auto_scheduler.build_register_input(params, cfg)
+        self.assertEqual(
+            stdin_input,
+            "\nregistered_accounts.txt\n200\n3\nn\n3\n",
+        )
+
     def test_auto_scheduler_main_runs_once_without_sleep(self):
         with mock.patch("auto_scheduler._load_account_count_config", return_value={}):
             with mock.patch("auto_scheduler.count_valid_accounts_local", return_value=999):

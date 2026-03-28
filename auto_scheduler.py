@@ -332,10 +332,11 @@ def build_register_input(params: dict, cfg: dict) -> str:
     顺序对应 main() 中的 input() 调用：
       1. 使用默认代理? (Y/n)   —— 仅当 config.json 有代理或环境变量有代理时出现
       2. 执行启动前连通性预检? (Y/n)
-      3. 注册前清理 CPA? (Y/n) —— 仅当 upload_api_url 非空时出现
+      3. 输出文件名
       4. 注册账号数量
       5. 并发数
-      6. 每成功多少个账号触发 CPA 上传
+      6. 注册前清理 CPA? (Y/n) —— 仅当 upload_api_url 非空时出现
+      7. 每成功多少个账号触发 CPA 上传
     """
     lines = []
 
@@ -365,12 +366,15 @@ def build_register_input(params: dict, cfg: dict) -> str:
     # 启动前预检
     lines.append(params.get("preflight", "n"))
 
+    lines.append(str(params.get("output_file", "registered_accounts.txt")))
+
+    lines.append(str(params.get("total_accounts", 10)))
+    lines.append(str(params.get("max_workers", 3)))
+
     # CPA 清理（仅当配置了 upload_api_url 时 main() 才会问）
     if cfg.get("upload_api_url", "").strip():
         lines.append(params.get("cpa_cleanup", "n"))
 
-    lines.append(str(params.get("total_accounts", 10)))
-    lines.append(str(params.get("max_workers", 3)))
     lines.append(str(params.get("cpa_upload_every_n", 3)))
 
     return "\n".join(lines) + "\n"
