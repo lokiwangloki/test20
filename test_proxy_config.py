@@ -76,7 +76,13 @@ class ProxyNormalizationTests(unittest.TestCase):
             "cpa_cleanup": "n",
             "cpa_upload_every_n": 3,
         }
-        stdin_input = auto_scheduler.build_register_input(params, cfg)
+        with mock.patch.dict("os.environ", {
+            "HTTPS_PROXY": "",
+            "https_proxy": "",
+            "ALL_PROXY": "",
+            "all_proxy": "",
+        }, clear=False):
+            stdin_input = auto_scheduler.build_register_input(params, cfg)
         self.assertEqual(
             stdin_input,
             "\nregistered_accounts.txt\n200\n3\nn\n3\n",
