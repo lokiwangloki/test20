@@ -85,7 +85,7 @@ class ProxyNormalizationTests(unittest.TestCase):
             stdin_input = auto_scheduler.build_register_input(params, cfg)
         self.assertEqual(
             stdin_input,
-            "\nregistered_accounts.txt\n200\n3\nn\n3\n",
+            "\nn\nregistered_accounts.txt\n200\n3\nn\n3\n",
         )
 
     def test_auto_scheduler_main_runs_once_without_sleep(self):
