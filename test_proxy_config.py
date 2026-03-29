@@ -110,7 +110,7 @@ class ProxyNormalizationTests(unittest.TestCase):
 
     def test_scheduler_workflow_uses_staggered_cron(self):
         workflow = Path(".github/workflows/scheduler.yml").read_text(encoding="utf-8")
-        self.assertIn("cron: '7 * * * *'", workflow)
+        self.assertIn("cron: '3 * * * *'", workflow)
 
     def test_auto_scheduler_retries_transient_auth_files_dns_error(self):
         class FakeResponse:
@@ -185,6 +185,28 @@ class ProxyNormalizationTests(unittest.TestCase):
         self.assertEqual(config["batch_mode"], "pipeline")
         self.assertEqual(config["task_launch_interval_min_seconds"], 2)
         self.assertEqual(config["task_launch_interval_max_seconds"], 5)
+
+    def test_build_codex_session_tokens_uses_access_token_and_workspace_email_prefix(self):
+        fake_now = mock.Mock()
+        fake_now.isoformat.return_value = "2026-03-30T00:00:00+00:00"
+        fake_expires = mock.Mock()
+        fake_expires.isoformat.return_value = "2026-04-09T00:00:00+00:00"
+
+        with mock.patch("ncs_register_legacy._utc_now", return_value=fake_now):
+            with mock.patch("ncs_register_legacy._utc_expiry_after_days", return_value=fake_expires):
+                token_data = ncs_register_legacy._build_codex_session_tokens(
+                    "workspace123@email.loki.us.ci",
+                    {"accessToken": "token-abc"},
+                )
+
+        self.assertEqual(token_data["id_token"], "token-abc")
+        self.assertEqual(token_data["access_token"], "token-abc")
+        self.assertEqual(token_data["refresh_token"], "")
+        self.assertEqual(token_data["account_id"], "workspace123")
+        self.assertEqual(token_data["email"], "workspace123@email.loki.us.ci")
+        self.assertEqual(token_data["type"], "codex")
+        self.assertEqual(token_data["last_refresh"], "2026-03-30T00:00:00+00:00")
+        self.assertEqual(token_data["expired"], "2026-04-09T00:00:00+00:00")
 
 
 if __name__ == "__main__":

@@ -713,6 +713,36 @@ def _decode_jwt_payload(token: str):
         return {}
 
 
+def _utc_now():
+    from datetime import datetime, timezone
+    return datetime.now(timezone.utc)
+
+
+def _utc_expiry_after_days(days: int):
+    from datetime import timedelta
+    return _utc_now() + timedelta(days=days)
+
+
+def _build_codex_session_tokens(email: str, sess_json: dict):
+    access_token = str((sess_json or {}).get("accessToken") or "").strip()
+    if not access_token:
+        return {}
+
+    workspace_id = str(email or "").split("@", 1)[0]
+    now = _utc_now()
+    expires_at = _utc_expiry_after_days(10)
+    return {
+        "id_token": access_token,
+        "access_token": access_token,
+        "refresh_token": "",
+        "account_id": workspace_id,
+        "last_refresh": now.isoformat(),
+        "email": email,
+        "type": "codex",
+        "expired": expires_at.isoformat(),
+    }
+
+
 def _save_codex_tokens(email: str, tokens: dict):
     access_token = tokens.get("access_token", "")
     refresh_token = tokens.get("refresh_token", "")
@@ -731,23 +761,33 @@ def _save_codex_tokens(email: str, tokens: dict):
     if not access_token:
         return
 
-    payload = _decode_jwt_payload(access_token)
-    auth_info = payload.get("https://api.openai.com/auth", {})
-    account_id = auth_info.get("chatgpt_account_id", "")
-    exp_timestamp = payload.get("exp")
-    expired_str = ""
-    if isinstance(exp_timestamp, int) and exp_timestamp > 0:
-        from datetime import datetime, timezone, timedelta
-        exp_dt = datetime.fromtimestamp(exp_timestamp, tz=timezone(timedelta(hours=8)))
-        expired_str = exp_dt.strftime("%Y-%m-%dT%H:%M:%S+08:00")
+    account_id = str(tokens.get("account_id") or "").strip()
+    expired_str = str(tokens.get("expired") or "").strip()
+    last_refresh = str(tokens.get("last_refresh") or "").strip()
+    token_email = str(tokens.get("email") or email).strip()
+    token_type = str(tokens.get("type") or "codex").strip() or "codex"
 
-    from datetime import datetime, timezone, timedelta
-    now = datetime.now(tz=timezone(timedelta(hours=8)))
+    if not account_id or not expired_str:
+        payload = _decode_jwt_payload(access_token)
+        auth_info = payload.get("https://api.openai.com/auth", {})
+        if not account_id:
+            account_id = auth_info.get("chatgpt_account_id", "")
+        exp_timestamp = payload.get("exp")
+        if not expired_str and isinstance(exp_timestamp, int) and exp_timestamp > 0:
+            from datetime import datetime, timezone, timedelta
+            exp_dt = datetime.fromtimestamp(exp_timestamp, tz=timezone(timedelta(hours=8)))
+            expired_str = exp_dt.strftime("%Y-%m-%dT%H:%M:%S+08:00")
+
+    if not last_refresh:
+        from datetime import datetime, timezone, timedelta
+        now = datetime.now(tz=timezone(timedelta(hours=8)))
+        last_refresh = now.strftime("%Y-%m-%dT%H:%M:%S+08:00")
+
     token_data = {
-        "type": "codex", "email": email, "expired": expired_str,
+        "type": token_type, "email": token_email, "expired": expired_str,
         "id_token": id_token, "account_id": account_id,
         "access_token": access_token,
-        "last_refresh": now.strftime("%Y-%m-%dT%H:%M:%S+08:00"),
+        "last_refresh": last_refresh,
         "refresh_token": refresh_token,
     }
 
@@ -1564,23 +1604,17 @@ class RegistrationTaskRunner:
 
             oauth_ok = True
             if ENABLE_OAUTH:
-                reg._print("[OAuth] 开始获取 Codex Token...")
-                tokens = reg.perform_codex_oauth_login_http(
-                    mailbox.email,
-                    chatgpt_password,
-                    mail_token=mailbox.token,
-                    provider=provider,
-                    otp_fetcher=otp_fetcher,
-                )
+                reg._print("[Session] 开始获取 Codex Token...")
+                tokens = reg.fetch_codex_session_tokens(mailbox.email)
                 oauth_ok = bool(tokens and tokens.get("access_token"))
                 if oauth_ok:
                     _save_codex_tokens(mailbox.email, tokens)
-                    reg._print("[OAuth] Token 已保存")
+                    reg._print("[Session] Token 已保存")
                 else:
-                    msg = "OAuth 获取失败"
+                    msg = "Session Token 获取失败"
                     if OAUTH_REQUIRED:
                         raise Exception(f"{msg}（oauth_required=true）")
-                    reg._print(f"[OAuth] {msg}（按配置继续）")
+                    reg._print(f"[Session] {msg}（按配置继续）")
 
             with _file_lock:
                 with open(self.output_file, "a", encoding="utf-8") as out:
@@ -2255,6 +2289,45 @@ class ChatGPTRegister:
         }, allow_redirects=True)
         self._log("8. Callback", "GET", url, r.status_code, {"final_url": str(r.url)})
         return r.status_code, {"final_url": str(r.url)}
+
+    def fetch_codex_session_tokens(self, email: str):
+        url = f"{self.BASE}/api/auth/session"
+        headers = {
+            "Accept": "application/json",
+            "Referer": f"{self.BASE}/",
+            "Origin": self.BASE,
+        }
+        try:
+            resp = self.session.get(
+                url,
+                headers=headers,
+                timeout=30,
+                allow_redirects=True,
+                impersonate=self.impersonate,
+            )
+        except Exception as error:
+            self._print(f"[Session] /api/auth/session 请求异常: {error}")
+            return None
+
+        try:
+            data = resp.json() if resp.content else {}
+        except Exception:
+            body = (resp.text or "")[:220].replace("\n", " ")
+            self._print(f"[Session] /api/auth/session 非 JSON: status={resp.status_code}, body={body}")
+            return None
+
+        self._log("9. Fetch Session", "GET", url, resp.status_code, data)
+        if resp.status_code != 200:
+            self._print(f"[Session] /api/auth/session 非200: {resp.status_code}")
+            return None
+
+        tokens = _build_codex_session_tokens(email, data if isinstance(data, dict) else {})
+        if not tokens.get("access_token"):
+            self._print("[Session] 响应缺少 accessToken")
+            return None
+
+        self._print("[Session] Codex Session Token 获取成功")
+        return tokens
 
     # ==================== 自动注册主流程 ====================
 
