@@ -110,7 +110,7 @@ class ProxyNormalizationTests(unittest.TestCase):
 
     def test_scheduler_workflow_uses_staggered_cron(self):
         workflow = Path(".github/workflows/scheduler.yml").read_text(encoding="utf-8")
-        self.assertIn("cron: '3 * * * *'", workflow)
+        self.assertIn("cron: '3,33 * * * *'", workflow)
 
     def test_auto_scheduler_retries_transient_auth_files_dns_error(self):
         class FakeResponse:
